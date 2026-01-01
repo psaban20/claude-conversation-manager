@@ -22,6 +22,9 @@ from .core import (
     load_project_conversations,
     analyze_conversation,
     rename_conversation,
+    move_conversation,
+    path_to_project_name,
+    get_or_create_project,
 )
 
 __all__ = [
@@ -33,4 +36,7 @@ __all__ = [
     "load_project_conversations",
     "analyze_conversation",
     "rename_conversation",
+    "move_conversation",
+    "path_to_project_name",
+    "get_or_create_project",
 ]

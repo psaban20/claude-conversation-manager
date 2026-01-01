@@ -437,3 +437,82 @@ def load_project_conversations(project: ClaudeProject) -> None:
     # Sort by modified date descending
     project.conversations.sort(key=lambda c: c.modified, reverse=True)
 
+
+
+def path_to_project_name(path: Path) -> str:
+    """Convert a filesystem path to Claude project folder name.
+    
+    Example: C:/dropboxfolders/pablosaban/Dropbox/HJB/GitHub 
+         -> c--dropboxfolders-pablosaban-Dropbox-HJB-GitHub
+    """
+    # Normalize the path
+    path_str = str(path.resolve())
+    
+    # Handle Windows drive letter
+    if len(path_str) >= 2 and path_str[1] == ':':
+        drive = path_str[0].lower()
+        rest = path_str[2:].replace('\\', '/').replace('/', '-')
+        return f"{drive}-{rest}"
+    else:
+        # Unix-style path
+        return path_str.replace('/', '-').lstrip('-')
+
+
+def get_or_create_project(target_path: Path) -> tuple[Path, bool]:
+    """Get or create a project folder for the given filesystem path.
+    
+    Args:
+        target_path: The filesystem path to associate with a project
+        
+    Returns:
+        tuple: (project_folder_path, was_created)
+    """
+    projects_dir = get_claude_projects_dir()
+    project_name = path_to_project_name(target_path)
+    project_path = projects_dir / project_name
+    
+    was_created = False
+    if not project_path.exists():
+        project_path.mkdir(parents=True)
+        was_created = True
+    
+    return project_path, was_created
+
+
+def move_conversation(conv_path: Path, target_project_path: Path) -> tuple[bool, str]:
+    """Move a conversation file to a different project folder.
+    
+    Args:
+        conv_path: Path to the conversation .jsonl file
+        target_project_path: Path to the target project folder
+        
+    Returns:
+        tuple: (success: bool, message: str)
+    """
+    import shutil
+    
+    try:
+        if not conv_path.exists():
+            return False, f"Source file not found: {conv_path}"
+        
+        if not target_project_path.exists():
+            return False, f"Target project not found: {target_project_path}"
+        
+        # Check if file already exists in target
+        target_file = target_project_path / conv_path.name
+        if target_file.exists():
+            return False, f"File already exists in target project: {conv_path.name}"
+        
+        # Move the main file
+        shutil.move(str(conv_path), str(target_file))
+        
+        # Also move backup if exists
+        backup_path = conv_path.with_suffix('.jsonl.backup')
+        if backup_path.exists():
+            target_backup = target_project_path / backup_path.name
+            shutil.move(str(backup_path), str(target_backup))
+        
+        return True, f"Moved to {target_project_path.name}"
+        
+    except Exception as e:
+        return False, f"Error moving file: {str(e)}"

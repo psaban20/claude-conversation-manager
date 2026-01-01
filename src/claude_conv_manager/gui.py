@@ -6,7 +6,7 @@ Features resizable panes for flexible layout.
 """
 
 import customtkinter as ctk
-from tkinter import messagebox, PanedWindow, HORIZONTAL
+from tkinter import messagebox, PanedWindow, HORIZONTAL, Toplevel, StringVar
 import threading
 import os
 from pathlib import Path
@@ -21,6 +21,9 @@ from .core import (
     load_project_conversations,
     analyze_conversation,
     rename_conversation,
+    move_conversation,
+    path_to_project_name,
+    get_or_create_project,
 )
 
 
@@ -183,22 +186,29 @@ class ConversationManagerApp(ctk.CTk):
         )
         self.rename_entry.grid(row=3, column=0, padx=20, pady=(5, 10), sticky="ew")
         
-        # Button frame for rename and delete
+        # Button frame for rename, delete, move
         btn_frame = ctk.CTkFrame(self.detail_panel, fg_color="transparent")
         btn_frame.grid(row=4, column=0, padx=20, pady=(0, 10), sticky="w")
         
         self.rename_btn = ctk.CTkButton(
             btn_frame, text="Rename All Branches",
-            command=self._do_rename, state="disabled", width=150
+            command=self._do_rename, state="disabled", width=140
         )
-        self.rename_btn.grid(row=0, column=0, padx=(0, 10))
+        self.rename_btn.grid(row=0, column=0, padx=(0, 5))
         
         self.delete_btn = ctk.CTkButton(
-            btn_frame, text="Delete Conversation",
-            command=self._do_delete, state="disabled", width=150,
+            btn_frame, text="Delete",
+            command=self._do_delete, state="disabled", width=80,
             fg_color="#8B0000", hover_color="#A00000"
         )
-        self.delete_btn.grid(row=0, column=1)
+        self.delete_btn.grid(row=0, column=1, padx=(0, 5))
+        
+        self.move_btn = ctk.CTkButton(
+            btn_frame, text="Move to Project...",
+            command=self._show_move_dialog, state="disabled", width=120,
+            fg_color="#1a5f2a", hover_color="#228B22"
+        )
+        self.move_btn.grid(row=0, column=2)
         
         # Branches section
         branches_label = ctk.CTkLabel(
@@ -404,6 +414,7 @@ class ConversationManagerApp(ctk.CTk):
         # Enable buttons
         self.rename_btn.configure(state="normal")
         self.delete_btn.configure(state="normal")
+        self.move_btn.configure(state="normal")
         
         self._display_branches(conv)
 
@@ -527,7 +538,7 @@ class ConversationManagerApp(ctk.CTk):
     
     def _delete_complete(self, success: bool, message: str):
         """Handle delete completion."""
-        self.delete_btn.configure(state="normal", text="Delete Conversation")
+        self.delete_btn.configure(state="normal", text="Delete")
         
         if success:
             messagebox.showinfo(
@@ -540,6 +551,7 @@ class ConversationManagerApp(ctk.CTk):
             self.rename_entry.delete(0, 'end')
             self.rename_btn.configure(state="disabled")
             self.delete_btn.configure(state="disabled")
+            self.move_btn.configure(state="disabled")
             
             for widget in self.branches_frame.winfo_children():
                 widget.destroy()
@@ -548,6 +560,167 @@ class ConversationManagerApp(ctk.CTk):
                 self._select_project(self.selected_project)
         else:
             messagebox.showerror("Error", f"Failed to delete: {message}")
+    
+    # =========================================================================
+    # Move to Project
+    # =========================================================================
+    
+    def _show_move_dialog(self):
+        """Show dialog to select target project for moving conversation."""
+        if not self.selected_conversation:
+            return
+        
+        # Create dialog window
+        dialog = ctk.CTkToplevel(self)
+        dialog.title("Move to Project")
+        dialog.geometry("600x500")
+        dialog.transient(self)
+        dialog.grab_set()
+        
+        # Center the dialog
+        dialog.update_idletasks()
+        x = self.winfo_x() + (self.winfo_width() - 600) // 2
+        y = self.winfo_y() + (self.winfo_height() - 500) // 2
+        dialog.geometry(f"+{x}+{y}")
+        
+        # Current location info
+        info_frame = ctk.CTkFrame(dialog)
+        info_frame.pack(fill="x", padx=20, pady=(20, 10))
+        
+        ctk.CTkLabel(
+            info_frame, text="Moving conversation:",
+            font=ctk.CTkFont(size=12, weight="bold")
+        ).pack(anchor="w", padx=10, pady=(10, 5))
+        
+        vscode_title = self.selected_conversation.vscode_current_title
+        if len(vscode_title) > 60:
+            vscode_title = vscode_title[:57] + "..."
+        ctk.CTkLabel(
+            info_frame, text=vscode_title,
+            font=ctk.CTkFont(size=11), text_color="#ffcc00"
+        ).pack(anchor="w", padx=10, pady=(0, 5))
+        
+        ctk.CTkLabel(
+            info_frame, text=f"From: {self.selected_project.display_name}",
+            font=ctk.CTkFont(size=11), text_color="gray"
+        ).pack(anchor="w", padx=10, pady=(0, 10))
+        
+        # Target selection
+        ctk.CTkLabel(
+            dialog, text="Select target project:",
+            font=ctk.CTkFont(size=14, weight="bold")
+        ).pack(anchor="w", padx=20, pady=(10, 5))
+        
+        # Existing projects list
+        projects_frame = ctk.CTkScrollableFrame(dialog, height=200)
+        projects_frame.pack(fill="both", expand=True, padx=20, pady=10)
+        
+        selected_target = StringVar(value="")
+        
+        for project in self.projects:
+            # Skip current project
+            if project.path == self.selected_project.path:
+                continue
+            
+            rb = ctk.CTkRadioButton(
+                projects_frame,
+                text=project.display_name,
+                variable=selected_target,
+                value=str(project.path),
+                font=ctk.CTkFont(size=11)
+            )
+            rb.pack(anchor="w", pady=3)
+        
+        # New project section
+        ctk.CTkLabel(
+            dialog, text="Or create new project from path:",
+            font=ctk.CTkFont(size=12, weight="bold")
+        ).pack(anchor="w", padx=20, pady=(10, 5))
+        
+        new_path_entry = ctk.CTkEntry(
+            dialog, 
+            placeholder_text="e.g., C:\\dropboxfolders\\pablosaban\\Dropbox\\HJB\\GitHub",
+            width=540
+        )
+        new_path_entry.pack(padx=20, pady=(0, 10))
+        
+        # Buttons
+        btn_frame = ctk.CTkFrame(dialog, fg_color="transparent")
+        btn_frame.pack(fill="x", padx=20, pady=15)
+        
+        def do_move():
+            # Check if new path entered
+            new_path = new_path_entry.get().strip()
+            if new_path:
+                target_path = Path(new_path)
+                if not target_path.exists():
+                    messagebox.showerror("Error", f"Path does not exist: {new_path}")
+                    return
+                # Create or get project folder
+                project_folder, was_created = get_or_create_project(target_path)
+                target = project_folder
+            elif selected_target.get():
+                target = Path(selected_target.get())
+            else:
+                messagebox.showwarning("Warning", "Please select a target project or enter a new path")
+                return
+            
+            dialog.destroy()
+            self._do_move(target)
+        
+        ctk.CTkButton(
+            btn_frame, text="Move", command=do_move, width=100
+        ).pack(side="left", padx=(0, 10))
+        
+        ctk.CTkButton(
+            btn_frame, text="Cancel", command=dialog.destroy, width=100,
+            fg_color="gray40", hover_color="gray50"
+        ).pack(side="left")
+    
+    def _do_move(self, target_project_path: Path):
+        """Execute the move operation."""
+        if not self.selected_conversation:
+            return
+        
+        self.move_btn.configure(state="disabled", text="Moving...")
+        self.update()
+        
+        def move():
+            success, message = move_conversation(
+                self.selected_conversation.path,
+                target_project_path
+            )
+            self.after(0, lambda: self._move_complete(success, message))
+        
+        threading.Thread(target=move, daemon=True).start()
+    
+    def _move_complete(self, success: bool, message: str):
+        """Handle move completion."""
+        self.move_btn.configure(state="normal", text="Move to Project...")
+        
+        if success:
+            messagebox.showinfo(
+                "Moved",
+                f"{message}\n\nRemember to restart VS Code to see changes!"
+            )
+            # Clear selection and refresh
+            self.selected_conversation = None
+            self.detail_vscode_title.configure(text="")
+            self.detail_stats.configure(text="No conversation selected")
+            self.rename_entry.delete(0, 'end')
+            self.rename_btn.configure(state="disabled")
+            self.delete_btn.configure(state="disabled")
+            self.move_btn.configure(state="disabled")
+            
+            for widget in self.branches_frame.winfo_children():
+                widget.destroy()
+            
+            # Refresh projects list and current project
+            self._load_projects()
+            if self.selected_project:
+                self.after(500, lambda: self._select_project(self.selected_project))
+        else:
+            messagebox.showerror("Error", f"Failed to move: {message}")
 
 
 def run_gui():
