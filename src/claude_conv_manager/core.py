@@ -82,6 +82,23 @@ class Conversation:
             if b.has_summary:
                 return b.summary
         return None
+    
+    @property
+    def vscode_current_title(self) -> str:
+        """What VS Code is currently showing for this conversation.
+        
+        This helps identify the conversation in the Past Conversations dropdown.
+        Returns the first user message from the branch VS Code would pick.
+        """
+        if not self.branches:
+            return "Unknown"
+        # VS Code picks a branch - we simulate by showing the first user message
+        # from the branch that would be displayed (one without summary, or first one)
+        for b in self.branches:
+            if not b.has_summary:
+                return b.first_user_message
+        # All have summaries, return the display name
+        return self.display_name
 
 
 @dataclass
