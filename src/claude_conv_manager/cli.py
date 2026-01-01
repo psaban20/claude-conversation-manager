@@ -4,7 +4,13 @@ Command-line interface for Claude Conversation Manager.
 
 import argparse
 import sys
+import io
 from pathlib import Path
+
+# Fix Unicode output on Windows
+if sys.platform == 'win32':
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
 
 from . import __version__
 from .core import (
@@ -43,10 +49,10 @@ def cmd_list(args):
         print("-" * 70)
         
         for conv in project.conversations:
-            status = "✓" if conv.is_healthy else f"⚠ {conv.unnamed_branches}/{conv.branch_count}"
+            status = "[OK]" if conv.is_healthy else f"[!] {conv.unnamed_branches}/{conv.branch_count}"
             date_str = conv.modified.strftime("%Y-%m-%d %H:%M")
             name = conv.display_name[:45] + "..." if len(conv.display_name) > 45 else conv.display_name
-            print(f"  [{status:>5}] {date_str} | {name}")
+            print(f"  {status:>10} {date_str} | {name}")
         
         return 0
     
@@ -96,17 +102,17 @@ def cmd_analyze(args):
     print(f"Modified: {conv.modified.strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"Total messages: {conv.total_messages}")
     print(f"Branches: {conv.branch_count}")
-    print(f"Health: {'✓ All branches named' if conv.is_healthy else f'⚠ {conv.unnamed_branches} unnamed'}")
+    print(f"Health: {'OK - All branches named' if conv.is_healthy else f'WARNING - {conv.unnamed_branches} unnamed'}")
     print(f"Display name: {conv.display_name}")
     
     print(f"\nBranches (sorted by timestamp):")
     print("-" * 70)
     
     for i, branch in enumerate(conv.branches, 1):
-        status = "✓" if branch.has_summary else "✗"
+        status = "[OK]" if branch.has_summary else "[--]"
         ts = branch.timestamp[:19] if branch.timestamp else "Unknown"
         name = branch.display_name[:40] + "..." if len(branch.display_name) > 40 else branch.display_name
-        print(f"  {i:2}. [{status}] {ts} | {branch.message_count:4} msgs | {name}")
+        print(f"  {i:2}. {status} {ts} | {branch.message_count:4} msgs | {name}")
     
     return 0
 
@@ -132,11 +138,11 @@ def cmd_rename(args):
     success, message = rename_conversation(path, args.name)
     
     if success:
-        print(f"✓ {message}")
-        print("\n⚠ IMPORTANT: Kill all Code.exe processes and restart VS Code to see changes!")
+        print(f"[OK] {message}")
+        print("\n** IMPORTANT: Kill all Code.exe processes and restart VS Code to see changes!")
         return 0
     else:
-        print(f"✗ {message}")
+        print(f"[FAILED] {message}")
         return 1
 
 
@@ -170,9 +176,9 @@ def cmd_health(args):
             print("-" * 70)
             
             for conv in (project.conversations if args.all else project_unhealthy):
-                status = "✓" if conv.is_healthy else f"⚠ {conv.unnamed_branches}/{conv.branch_count} unnamed"
+                status = "[OK]" if conv.is_healthy else f"[!] {conv.unnamed_branches}/{conv.branch_count} unnamed"
                 name = conv.display_name[:40] + "..." if len(conv.display_name) > 40 else conv.display_name
-                print(f"  [{status:>12}] {name}")
+                print(f"  {status:>20} {name}")
         
         total_convs += len(project.conversations)
         unhealthy_convs += len(project_unhealthy)
