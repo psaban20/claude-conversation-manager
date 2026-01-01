@@ -42,6 +42,9 @@ dev = [
 [project.scripts]
 claude-conv-manager = "claude_conv_manager.cli:main"
 
+[project.gui-scripts]
+claude-conv-manager-gui = "claude_conv_manager.gui:run_gui"
+
 [project.urls]
 Homepage = "https://github.com/pablosaban/claude-conversation-manager"
 Repository = "https://github.com/pablosaban/claude-conversation-manager"

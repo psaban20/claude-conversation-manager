@@ -19,6 +19,7 @@ from .core import (
     Branch,
     get_claude_projects_dir,
     list_projects,
+    load_project_conversations,
     analyze_conversation,
     rename_conversation,
 )
@@ -29,6 +30,7 @@ __all__ = [
     "Branch",
     "get_claude_projects_dir",
     "list_projects",
+    "load_project_conversations",
     "analyze_conversation",
     "rename_conversation",
 ]
