@@ -87,18 +87,25 @@ class Conversation:
     def vscode_current_title(self) -> str:
         """What VS Code is currently showing for this conversation.
         
-        This helps identify the conversation in the Past Conversations dropdown.
-        Returns the first user message from the branch VS Code would pick.
+        VS Code picks the most recent non-sidechain branch, then shows either
+        its summary (if exists) or its first non-meta user message.
         """
         if not self.branches:
             return "Unknown"
-        # VS Code picks a branch - we simulate by showing the first user message
-        # from the branch that would be displayed (one without summary, or first one)
-        for b in self.branches:
-            if not b.has_summary:
-                return b.first_user_message
-        # All have summaries, return the display name
-        return self.display_name
+        
+        # VS Code sorts by timestamp descending and picks the first one
+        sorted_branches = sorted(self.branches, key=lambda b: b.timestamp, reverse=True)
+        
+        # Find the first branch - this is what VS Code would display
+        if sorted_branches:
+            branch = sorted_branches[0]
+            if branch.has_summary:
+                return branch.summary
+            else:
+                # Return the first user message (this is what VS Code shows)
+                return branch.first_user_message
+        
+        return "Unknown"
 
 
 @dataclass
@@ -176,29 +183,45 @@ def _get_transcript(messages: dict, leaf_uuid: str) -> list[dict]:
     return list(reversed(chain))
 
 
-def _get_first_user_message(transcript: list[dict]) -> str:
-    """Extract the first meaningful user message from a transcript."""
+def _get_first_user_message(transcript: list[dict], skip_meta: bool = True) -> str:
+    """Extract the first meaningful user message from a transcript.
+    
+    VS Code's extension skips 'meta' messages when determining the display name.
+    Meta messages include session continuations like "This session is being continued..."
+    """
     for msg in transcript:
         if msg.get('type') != 'user':
             continue
+        
+        # Skip meta messages (VS Code does this via isMeta flag)
+        if skip_meta and msg.get('isMeta'):
+            continue
+            
         content = msg.get('message', {}).get('content', [])
         
         if isinstance(content, str):
+            # Skip session continuation messages
+            if skip_meta and content.startswith('This session is being continued'):
+                continue
             return content[:50] + '...' if len(content) > 50 else content
         
         if isinstance(content, list):
-            # First pass: skip IDE system messages
+            # First pass: skip IDE system messages and session continuations
+            for c in content:
+                if isinstance(c, dict) and c.get('type') == 'text':
+                    text = c.get('text', '')
+                    if text.startswith('<ide_'):
+                        continue
+                    if skip_meta and text.startswith('This session is being continued'):
+                        continue
+                    return text[:50] + '...' if len(text) > 50 else text
+            
+            # Fallback: use any text content (even if meta)
             for c in content:
                 if isinstance(c, dict) and c.get('type') == 'text':
                     text = c.get('text', '')
                     if not text.startswith('<ide_'):
                         return text[:50] + '...' if len(text) > 50 else text
-            
-            # Fallback: use any text content
-            for c in content:
-                if isinstance(c, dict) and c.get('type') == 'text':
-                    text = c.get('text', '')
-                    return text[:50] + '...' if len(text) > 50 else text
     
     return 'No prompt'
 

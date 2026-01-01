@@ -2,10 +2,11 @@
 GUI Application for Claude Conversation Manager.
 
 A modern GUI built with CustomTkinter for managing Claude Code conversations.
+Features resizable panes for flexible layout.
 """
 
 import customtkinter as ctk
-from tkinter import messagebox
+from tkinter import messagebox, PanedWindow, HORIZONTAL
 import threading
 import os
 from pathlib import Path
@@ -29,43 +30,55 @@ ctk.set_default_color_theme("blue")
 
 
 class ConversationManagerApp(ctk.CTk):
-    """Main application window."""
+    """Main application window with resizable panes."""
     
     def __init__(self):
         super().__init__()
         
         self.title("Claude Conversation Manager")
         self.geometry("1400x750")
-        self.minsize(1100, 600)
+        self.minsize(1000, 600)
         
         # Data
         self.projects: list[ClaudeProject] = []
         self.selected_project: Optional[ClaudeProject] = None
         self.selected_conversation: Optional[Conversation] = None
         
-        # Build UI
-        self._create_layout()
-        self._create_sidebar()
-        self._create_main_panel()
-        self._create_detail_panel()
+        # Build UI with resizable panes
+        self._create_resizable_layout()
         
         # Load data
         self.after(100, self._load_projects)
     
-    def _create_layout(self):
-        """Create the main layout grid."""
-        self.grid_columnconfigure(0, weight=0)  # Sidebar - fixed
-        self.grid_columnconfigure(1, weight=1)  # Main panel - expand
-        self.grid_columnconfigure(2, weight=0)  # Detail panel - fixed
+    def _create_resizable_layout(self):
+        """Create resizable three-pane layout."""
+        # Main container
         self.grid_rowconfigure(0, weight=1)
+        self.grid_columnconfigure(0, weight=1)
+        
+        # Use tkinter PanedWindow for resizable panes
+        self.paned = PanedWindow(
+            self, orient=HORIZONTAL, 
+            sashwidth=6, sashrelief="raised",
+            bg="#2b2b2b"
+        )
+        self.paned.grid(row=0, column=0, sticky="nsew")
+        
+        # Create the three panes
+        self._create_sidebar()
+        self._create_main_panel()
+        self._create_detail_panel()
+        
+        # Add panes to PanedWindow
+        self.paned.add(self.sidebar, minsize=250, width=350)
+        self.paned.add(self.main_panel, minsize=300, width=450)
+        self.paned.add(self.detail_panel, minsize=300, width=400)
     
     def _create_sidebar(self):
         """Create the left sidebar with project list."""
-        # WIDER sidebar (was 280, now 380)
-        self.sidebar = ctk.CTkFrame(self, width=380, corner_radius=0)
-        self.sidebar.grid(row=0, column=0, sticky="nsew")
+        self.sidebar = ctk.CTkFrame(self.paned, corner_radius=0)
         self.sidebar.grid_rowconfigure(2, weight=1)
-        self.sidebar.grid_propagate(False)
+        self.sidebar.grid_columnconfigure(0, weight=1)
         
         # Header
         header = ctk.CTkLabel(
@@ -92,8 +105,7 @@ class ConversationManagerApp(ctk.CTk):
 
     def _create_main_panel(self):
         """Create the center panel with conversation list."""
-        self.main_panel = ctk.CTkFrame(self, corner_radius=0)
-        self.main_panel.grid(row=0, column=1, sticky="nsew", padx=(1, 1))
+        self.main_panel = ctk.CTkFrame(self.paned, corner_radius=0)
         self.main_panel.grid_rowconfigure(2, weight=1)
         self.main_panel.grid_columnconfigure(0, weight=1)
         
@@ -123,10 +135,9 @@ class ConversationManagerApp(ctk.CTk):
     
     def _create_detail_panel(self):
         """Create the right panel with conversation details."""
-        self.detail_panel = ctk.CTkFrame(self, width=400, corner_radius=0)
-        self.detail_panel.grid(row=0, column=2, sticky="nsew")
+        self.detail_panel = ctk.CTkFrame(self.paned, corner_radius=0)
         self.detail_panel.grid_rowconfigure(6, weight=1)
-        self.detail_panel.grid_propagate(False)
+        self.detail_panel.grid_columnconfigure(0, weight=1)
         
         # Header
         header = ctk.CTkLabel(
@@ -139,6 +150,7 @@ class ConversationManagerApp(ctk.CTk):
         # Info frame - VS Code current title
         self.info_frame = ctk.CTkFrame(self.detail_panel)
         self.info_frame.grid(row=1, column=0, padx=15, pady=10, sticky="ew")
+        self.info_frame.grid_columnconfigure(0, weight=1)
         
         vscode_label = ctk.CTkLabel(
             self.info_frame, text="VS Code Shows:",
@@ -148,7 +160,7 @@ class ConversationManagerApp(ctk.CTk):
         
         self.detail_vscode_title = ctk.CTkLabel(
             self.info_frame, text="",
-            font=ctk.CTkFont(size=12), wraplength=360, anchor="w", justify="left",
+            font=ctk.CTkFont(size=12), wraplength=350, anchor="w", justify="left",
             text_color="#ffcc00"
         )
         self.detail_vscode_title.grid(row=1, column=0, padx=10, pady=(0, 5), sticky="w")
@@ -167,9 +179,9 @@ class ConversationManagerApp(ctk.CTk):
         rename_label.grid(row=2, column=0, padx=20, pady=(15, 5), sticky="w")
         
         self.rename_entry = ctk.CTkEntry(
-            self.detail_panel, placeholder_text="Enter new name...", width=360
+            self.detail_panel, placeholder_text="Enter new name...", width=350
         )
-        self.rename_entry.grid(row=3, column=0, padx=20, pady=(5, 10), sticky="w")
+        self.rename_entry.grid(row=3, column=0, padx=20, pady=(5, 10), sticky="ew")
         
         # Button frame for rename and delete
         btn_frame = ctk.CTkFrame(self.detail_panel, fg_color="transparent")
@@ -177,13 +189,13 @@ class ConversationManagerApp(ctk.CTk):
         
         self.rename_btn = ctk.CTkButton(
             btn_frame, text="Rename All Branches",
-            command=self._do_rename, state="disabled", width=160
+            command=self._do_rename, state="disabled", width=150
         )
         self.rename_btn.grid(row=0, column=0, padx=(0, 10))
         
         self.delete_btn = ctk.CTkButton(
             btn_frame, text="Delete Conversation",
-            command=self._do_delete, state="disabled", width=160,
+            command=self._do_delete, state="disabled", width=150,
             fg_color="#8B0000", hover_color="#A00000"
         )
         self.delete_btn.grid(row=0, column=1)
@@ -251,10 +263,8 @@ class ConversationManagerApp(ctk.CTk):
     
     def _create_project_button(self, project: ClaudeProject, row: int):
         """Create a button for a project."""
-        # Better path display - show more of the path
+        # Show full path - sidebar is now resizable
         display = project.display_name
-        if len(display) > 50:
-            display = "..." + display[-47:]
         
         conv_count = len([
             f for f in project.path.iterdir()
@@ -271,7 +281,7 @@ class ConversationManagerApp(ctk.CTk):
             frame,
             text=f"{display}\n{conv_count} conversations",
             anchor="w",
-            font=ctk.CTkFont(size=12),
+            font=ctk.CTkFont(size=11),
             fg_color="transparent",
             hover_color=("gray75", "gray25"),
             height=45,
@@ -284,10 +294,7 @@ class ConversationManagerApp(ctk.CTk):
         self.selected_project = project
         self.selected_conversation = None
         
-        display = project.display_name
-        if len(display) > 60:
-            display = "..." + display[-57:]
-        self.main_header.configure(text=display)
+        self.main_header.configure(text=project.display_name)
         
         for widget in self.conv_list.winfo_children():
             widget.destroy()
@@ -330,7 +337,7 @@ class ConversationManagerApp(ctk.CTk):
             self._create_conversation_row(conv, i)
     
     def _create_conversation_row(self, conv: Conversation, row: int):
-        """Create a row for a conversation - showing VS Code title for unhealthy ones."""
+        """Create a row for a conversation - showing VS Code title."""
         frame = ctk.CTkFrame(self.conv_list, fg_color="transparent")
         frame.grid(row=row, column=0, pady=2, sticky="ew")
         frame.grid_columnconfigure(1, weight=1)
@@ -350,23 +357,19 @@ class ConversationManagerApp(ctk.CTk):
         )
         status.grid(row=0, column=0, padx=(5, 10))
         
-        # For unhealthy conversations, show VS Code current title prominently
+        # Always show VS Code title to help identify conversations
+        vscode_title = conv.vscode_current_title
+        if len(vscode_title) > 55:
+            vscode_title = vscode_title[:52] + "..."
+        
         if conv.is_healthy:
-            name = conv.display_name
-            if len(name) > 55:
-                name = name[:52] + "..."
             subtitle = f"{conv.modified.strftime('%Y-%m-%d')} - {conv.branch_count} branches - {conv.total_messages} msgs"
         else:
-            # Show what VS Code displays (helps identify the conversation)
-            vscode_title = conv.vscode_current_title
-            if len(vscode_title) > 50:
-                vscode_title = vscode_title[:47] + "..."
-            name = f"VS Code: {vscode_title}"
             subtitle = f"{conv.modified.strftime('%Y-%m-%d')} - {conv.branch_count} branches - {conv.unnamed_branches} need names"
         
         btn = ctk.CTkButton(
             frame,
-            text=f"{name}\n{subtitle}",
+            text=f"{vscode_title}\n{subtitle}",
             anchor="w",
             font=ctk.CTkFont(size=12),
             fg_color="transparent",
@@ -382,8 +385,6 @@ class ConversationManagerApp(ctk.CTk):
         
         # Show VS Code current title prominently
         vscode_title = conv.vscode_current_title
-        if len(vscode_title) > 50:
-            vscode_title = vscode_title[:47] + "..."
         self.detail_vscode_title.configure(text=vscode_title)
         
         stats = (
@@ -424,7 +425,10 @@ class ConversationManagerApp(ctk.CTk):
             )
             status.grid(row=0, column=0, padx=(10, 5), pady=8)
             
-            name = branch.display_name[:35] + "..." if len(branch.display_name) > 35 else branch.display_name
+            # Show the actual first user message for this branch
+            name = branch.first_user_message
+            if len(name) > 40:
+                name = name[:37] + "..."
             ts = branch.timestamp[:10] if branch.timestamp else "Unknown"
             
             info = ctk.CTkLabel(
@@ -482,18 +486,21 @@ class ConversationManagerApp(ctk.CTk):
             return
         
         conv = self.selected_conversation
+        vscode_title = conv.vscode_current_title
+        if len(vscode_title) > 60:
+            vscode_title = vscode_title[:57] + "..."
         
         # Confirmation dialog
         result = messagebox.askyesno(
             "Confirm Delete",
-            f"Are you sure you want to delete this conversation?\n\n"
-            f"VS Code shows: {conv.vscode_current_title[:50]}...\n"
+            f"Delete this conversation?\n\n"
+            f"VS Code shows: {vscode_title}\n"
             f"Branches: {conv.branch_count}\n"
             f"Messages: {conv.total_messages}\n\n"
             f"This will delete:\n"
             f"  - {conv.filename}\n"
             f"  - {conv.filename}.backup (if exists)\n\n"
-            f"This action cannot be undone!",
+            f"This cannot be undone!",
             icon="warning"
         )
         
@@ -505,11 +512,9 @@ class ConversationManagerApp(ctk.CTk):
         
         def delete():
             try:
-                # Delete main file
                 if conv.path.exists():
                     os.remove(conv.path)
                 
-                # Delete backup if exists
                 backup_path = conv.path.with_suffix('.jsonl.backup')
                 if backup_path.exists():
                     os.remove(backup_path)
@@ -536,11 +541,9 @@ class ConversationManagerApp(ctk.CTk):
             self.rename_btn.configure(state="disabled")
             self.delete_btn.configure(state="disabled")
             
-            # Clear branches
             for widget in self.branches_frame.winfo_children():
                 widget.destroy()
             
-            # Refresh list
             if self.selected_project:
                 self._select_project(self.selected_project)
         else:
