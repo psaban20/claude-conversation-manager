@@ -573,19 +573,23 @@ class ConversationManagerApp(ctk.CTk):
         # Create dialog window
         dialog = ctk.CTkToplevel(self)
         dialog.title("Move to Project")
-        dialog.geometry("600x500")
+        dialog.geometry("600x550")
         dialog.transient(self)
         dialog.grab_set()
         
         # Center the dialog
         dialog.update_idletasks()
         x = self.winfo_x() + (self.winfo_width() - 600) // 2
-        y = self.winfo_y() + (self.winfo_height() - 500) // 2
+        y = self.winfo_y() + (self.winfo_height() - 550) // 2
         dialog.geometry(f"+{x}+{y}")
+        
+        # Main container with grid layout for better control
+        dialog.grid_rowconfigure(2, weight=1)  # Projects list expands
+        dialog.grid_columnconfigure(0, weight=1)
         
         # Current location info
         info_frame = ctk.CTkFrame(dialog)
-        info_frame.pack(fill="x", padx=20, pady=(20, 10))
+        info_frame.grid(row=0, column=0, sticky="ew", padx=20, pady=(20, 10))
         
         ctk.CTkLabel(
             info_frame, text="Moving conversation:",
@@ -605,15 +609,15 @@ class ConversationManagerApp(ctk.CTk):
             font=ctk.CTkFont(size=11), text_color="gray"
         ).pack(anchor="w", padx=10, pady=(0, 10))
         
-        # Target selection
+        # Target selection label
         ctk.CTkLabel(
             dialog, text="Select target project:",
             font=ctk.CTkFont(size=14, weight="bold")
-        ).pack(anchor="w", padx=20, pady=(10, 5))
+        ).grid(row=1, column=0, sticky="w", padx=20, pady=(10, 5))
         
-        # Existing projects list
-        projects_frame = ctk.CTkScrollableFrame(dialog, height=200)
-        projects_frame.pack(fill="both", expand=True, padx=20, pady=10)
+        # Existing projects list (fixed height, scrollable)
+        projects_frame = ctk.CTkScrollableFrame(dialog, height=180)
+        projects_frame.grid(row=2, column=0, sticky="nsew", padx=20, pady=(0, 10))
         
         selected_target = StringVar(value="")
         
@@ -631,22 +635,26 @@ class ConversationManagerApp(ctk.CTk):
             )
             rb.pack(anchor="w", pady=3)
         
+        # Bottom section (new path + buttons)
+        bottom_frame = ctk.CTkFrame(dialog, fg_color="transparent")
+        bottom_frame.grid(row=3, column=0, sticky="ew", padx=20, pady=(10, 20))
+        
         # New project section
         ctk.CTkLabel(
-            dialog, text="Or create new project from path:",
+            bottom_frame, text="Or create new project from path:",
             font=ctk.CTkFont(size=12, weight="bold")
-        ).pack(anchor="w", padx=20, pady=(10, 5))
+        ).pack(anchor="w", pady=(0, 5))
         
         new_path_entry = ctk.CTkEntry(
-            dialog, 
+            bottom_frame, 
             placeholder_text="e.g., C:\\dropboxfolders\\pablosaban\\Dropbox\\HJB\\GitHub",
             width=540
         )
-        new_path_entry.pack(padx=20, pady=(0, 10))
+        new_path_entry.pack(fill="x", pady=(0, 15))
         
         # Buttons
-        btn_frame = ctk.CTkFrame(dialog, fg_color="transparent")
-        btn_frame.pack(fill="x", padx=20, pady=15)
+        btn_frame = ctk.CTkFrame(bottom_frame, fg_color="transparent")
+        btn_frame.pack(fill="x")
         
         def do_move():
             # Check if new path entered
@@ -669,7 +677,8 @@ class ConversationManagerApp(ctk.CTk):
             self._do_move(target)
         
         ctk.CTkButton(
-            btn_frame, text="Move", command=do_move, width=100
+            btn_frame, text="Move", command=do_move, width=100,
+            fg_color="#1a5f2a", hover_color="#228B22"
         ).pack(side="left", padx=(0, 10))
         
         ctk.CTkButton(
