@@ -705,3 +705,104 @@ def _extract_text_from_content(content) -> str:
         return ' '.join(texts)
     
     return ''
+
+
+
+def get_branch_summary(path: Path, leaf_uuid: str, max_words: int = 500) -> str:
+    """Generate a summary of a specific branch's content.
+    
+    Traces from the leaf node back to root and summarizes only
+    the messages in that conversation path.
+    
+    Args:
+        path: Path to the .jsonl file
+        leaf_uuid: UUID of the branch's leaf node
+        max_words: Maximum words in summary (default 500)
+        
+    Returns:
+        Summary string
+    """
+    try:
+        messages, summaries = _parse_jsonl_file(path)
+        
+        if not messages:
+            return "Empty conversation"
+        
+        # Get the transcript for this specific branch
+        transcript = _get_branch_transcript(messages, leaf_uuid)
+        
+        if not transcript:
+            return "Could not trace branch history"
+        
+        # Collect user and assistant messages from this branch
+        user_messages = []
+        assistant_messages = []
+        
+        for msg in transcript:
+            msg_type = msg.get('type')
+            
+            if msg_type == 'user':
+                # Skip meta messages
+                if msg.get('isMeta'):
+                    continue
+                    
+                content = msg.get('message', {}).get('content', [])
+                text = _extract_text_from_content(content)
+                
+                # Skip session continuation and IDE messages
+                if text and not text.startswith('This session is being continued'):
+                    if not text.startswith('<ide_'):
+                        user_messages.append(text)
+            
+            elif msg_type == 'assistant':
+                content = msg.get('message', {}).get('content', [])
+                text = _extract_text_from_content(content)
+                if text and len(text) > 30:
+                    assistant_messages.append(text)
+        
+        # Build summary
+        lines = []
+        
+        # Header with stats
+        lines.append(f"## Branch Summary")
+        lines.append(f"**Messages in branch:** {len(transcript)} ({len(user_messages)} user, {len(assistant_messages)} assistant)")
+        lines.append("")
+        
+        # User prompts section
+        lines.append("## User Prompts")
+        lines.append("")
+        
+        word_count = 0
+        for i, msg in enumerate(user_messages[:15], 1):
+            # Truncate long messages
+            if len(msg) > 300:
+                msg = msg[:300] + "..."
+            
+            lines.append(f"{i}. {msg}")
+            lines.append("")
+            
+            word_count += len(msg.split())
+            if word_count > max_words * 0.5:
+                if i < len(user_messages):
+                    lines.append(f"*...and {len(user_messages) - i} more prompts*")
+                break
+        
+        # Assistant highlights (brief)
+        if assistant_messages and word_count < max_words * 0.8:
+            lines.append("")
+            lines.append("## Key Assistant Responses")
+            lines.append("")
+            
+            for i, msg in enumerate(assistant_messages[:5], 1):
+                # Show first 150 chars
+                snippet = msg[:150] + "..." if len(msg) > 150 else msg
+                lines.append(f"- {snippet}")
+                
+                word_count += len(snippet.split())
+                if word_count > max_words:
+                    break
+        
+        return "\n".join(lines)
+        
+    except Exception as e:
+        return f"Error generating branch summary: {str(e)}"

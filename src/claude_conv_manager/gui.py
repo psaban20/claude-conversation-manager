@@ -26,6 +26,7 @@ from .core import (
     get_or_create_project,
     archive_conversation,
     get_conversation_summary,
+    get_branch_summary,
 )
 
 
@@ -439,20 +440,30 @@ class ConversationManagerApp(ctk.CTk):
         self._display_branches(conv)
 
 
+
     def _display_branches(self, conv: Conversation):
-        """Display branch details."""
+        """Display branch details - clickable for summary."""
         for widget in self.branches_frame.winfo_children():
             widget.destroy()
         
+        # Add hint at top
+        hint = ctk.CTkLabel(
+            self.branches_frame,
+            text="Click a branch to view its summary",
+            font=ctk.CTkFont(size=10),
+            text_color="gray"
+        )
+        hint.grid(row=0, column=0, pady=(0, 5), sticky="w")
+        
         for i, branch in enumerate(conv.branches):
             frame = ctk.CTkFrame(self.branches_frame, fg_color=("gray85", "gray20"))
-            frame.grid(row=i, column=0, pady=3, sticky="ew")
+            frame.grid(row=i+1, column=0, pady=3, sticky="ew")
             frame.grid_columnconfigure(1, weight=1)
             
             color = "#2ecc71" if branch.has_summary else "#e74c3c"
             status = ctk.CTkLabel(
-                frame, text="*", text_color=color,
-                font=ctk.CTkFont(size=14, weight="bold")
+                frame, text="●", text_color=color,
+                font=ctk.CTkFont(size=12, weight="bold")
             )
             status.grid(row=0, column=0, padx=(10, 5), pady=8)
             
@@ -462,14 +473,96 @@ class ConversationManagerApp(ctk.CTk):
                 name = name[:37] + "..."
             ts = branch.timestamp[:10] if branch.timestamp else "Unknown"
             
-            info = ctk.CTkLabel(
+            # Make the branch clickable
+            btn = ctk.CTkButton(
                 frame,
                 text=f"{name}\n{ts} - {branch.message_count} msgs",
                 font=ctk.CTkFont(size=11),
                 anchor="w",
-                justify="left"
+                fg_color="transparent",
+                hover_color=("gray75", "gray35"),
+                text_color=("gray10", "gray90"),
+                height=40,
+                command=lambda b=branch, c=conv: self._show_branch_summary(b, c)
             )
-            info.grid(row=0, column=1, padx=5, pady=5, sticky="w")
+            btn.grid(row=0, column=1, padx=5, pady=2, sticky="ew")
+    
+    def _show_branch_summary(self, branch: Branch, conv: Conversation):
+        """Show summary for a specific branch."""
+        # Create dialog
+        dialog = ctk.CTkToplevel(self)
+        dialog.title(f"Branch Summary")
+        dialog.geometry("700x500")
+        dialog.transient(self)
+        dialog.grab_set()
+        
+        # Center
+        dialog.update_idletasks()
+        x = self.winfo_x() + (self.winfo_width() - 700) // 2
+        y = self.winfo_y() + (self.winfo_height() - 500) // 2
+        dialog.geometry(f"+{x}+{y}")
+        
+        dialog.grid_rowconfigure(1, weight=1)
+        dialog.grid_columnconfigure(0, weight=1)
+        
+        # Header with branch info
+        header_frame = ctk.CTkFrame(dialog)
+        header_frame.grid(row=0, column=0, sticky="ew", padx=20, pady=(20, 10))
+        
+        branch_name = branch.first_user_message
+        if len(branch_name) > 60:
+            branch_name = branch_name[:57] + "..."
+        
+        ctk.CTkLabel(
+            header_frame, text=branch_name,
+            font=ctk.CTkFont(size=14, weight="bold"),
+            text_color="#ffcc00"
+        ).pack(anchor="w", padx=10, pady=(10, 5))
+        
+        status_text = "Named" if branch.has_summary else "Unnamed"
+        status_color = "#2ecc71" if branch.has_summary else "#e74c3c"
+        
+        ctk.CTkLabel(
+            header_frame,
+            text=f"{branch.message_count} messages | {branch.timestamp[:10] if branch.timestamp else 'Unknown'} | {status_text}",
+            font=ctk.CTkFont(size=11),
+            text_color="gray"
+        ).pack(anchor="w", padx=10, pady=(0, 10))
+        
+        # Loading indicator
+        loading_label = ctk.CTkLabel(
+            dialog, text="Generating summary...",
+            font=ctk.CTkFont(size=12)
+        )
+        loading_label.grid(row=1, column=0, pady=50)
+        dialog.update()
+        
+        def generate():
+            summary = get_branch_summary(conv.path, branch.leaf_uuid, max_words=500)
+            dialog.after(0, lambda: show_summary(summary))
+        
+        def show_summary(summary: str):
+            loading_label.destroy()
+            
+            # Scrollable text area
+            text_frame = ctk.CTkScrollableFrame(dialog)
+            text_frame.grid(row=1, column=0, sticky="nsew", padx=20, pady=10)
+            text_frame.grid_columnconfigure(0, weight=1)
+            
+            summary_label = ctk.CTkLabel(
+                text_frame, text=summary,
+                font=ctk.CTkFont(size=12),
+                anchor="nw", justify="left",
+                wraplength=640
+            )
+            summary_label.grid(row=0, column=0, sticky="ew")
+        
+        threading.Thread(target=generate, daemon=True).start()
+        
+        # Close button
+        ctk.CTkButton(
+            dialog, text="Close", command=dialog.destroy, width=100
+        ).grid(row=2, column=0, pady=(0, 20))
     
     # =========================================================================
     # Actions

@@ -28,6 +28,7 @@ from .core import (
     archive_conversation,
     restore_conversation,
     get_conversation_summary,
+    get_branch_summary,
 )
 
 __all__ = [
@@ -45,4 +46,5 @@ __all__ = [
     "archive_conversation",
     "restore_conversation",
     "get_conversation_summary",
+    "get_branch_summary",
 ]
