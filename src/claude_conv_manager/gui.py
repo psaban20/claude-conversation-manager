@@ -24,6 +24,8 @@ from .core import (
     move_conversation,
     path_to_project_name,
     get_or_create_project,
+    archive_conversation,
+    get_conversation_summary,
 )
 
 
@@ -186,29 +188,45 @@ class ConversationManagerApp(ctk.CTk):
         )
         self.rename_entry.grid(row=3, column=0, padx=20, pady=(5, 10), sticky="ew")
         
-        # Button frame for rename, delete, move
+        # Button frame for actions (two rows)
         btn_frame = ctk.CTkFrame(self.detail_panel, fg_color="transparent")
-        btn_frame.grid(row=4, column=0, padx=20, pady=(0, 10), sticky="w")
+        btn_frame.grid(row=4, column=0, padx=20, pady=(0, 10), sticky="ew")
         
+        # Row 1: Rename, Archive, Delete
         self.rename_btn = ctk.CTkButton(
-            btn_frame, text="Rename All Branches",
-            command=self._do_rename, state="disabled", width=140
+            btn_frame, text="Rename All",
+            command=self._do_rename, state="disabled", width=100
         )
-        self.rename_btn.grid(row=0, column=0, padx=(0, 5))
+        self.rename_btn.grid(row=0, column=0, padx=(0, 5), pady=(0, 5))
+        
+        self.archive_btn = ctk.CTkButton(
+            btn_frame, text="Archive",
+            command=self._do_archive, state="disabled", width=80,
+            fg_color="#555555", hover_color="#666666"
+        )
+        self.archive_btn.grid(row=0, column=1, padx=(0, 5), pady=(0, 5))
         
         self.delete_btn = ctk.CTkButton(
             btn_frame, text="Delete",
-            command=self._do_delete, state="disabled", width=80,
+            command=self._do_delete, state="disabled", width=70,
             fg_color="#8B0000", hover_color="#A00000"
         )
-        self.delete_btn.grid(row=0, column=1, padx=(0, 5))
+        self.delete_btn.grid(row=0, column=2, padx=(0, 5), pady=(0, 5))
         
+        # Row 2: Move, Summary
         self.move_btn = ctk.CTkButton(
-            btn_frame, text="Move to Project...",
-            command=self._show_move_dialog, state="disabled", width=120,
+            btn_frame, text="Move...",
+            command=self._show_move_dialog, state="disabled", width=80,
             fg_color="#1a5f2a", hover_color="#228B22"
         )
-        self.move_btn.grid(row=0, column=2)
+        self.move_btn.grid(row=1, column=0, padx=(0, 5))
+        
+        self.summary_btn = ctk.CTkButton(
+            btn_frame, text="View Summary",
+            command=self._show_summary, state="disabled", width=170,
+            fg_color="#1a4a6e", hover_color="#2a5a7e"
+        )
+        self.summary_btn.grid(row=1, column=1, columnspan=2, padx=(0, 5))
         
         # Branches section
         branches_label = ctk.CTkLabel(
@@ -415,6 +433,8 @@ class ConversationManagerApp(ctk.CTk):
         self.rename_btn.configure(state="normal")
         self.delete_btn.configure(state="normal")
         self.move_btn.configure(state="normal")
+        self.archive_btn.configure(state="normal")
+        self.summary_btn.configure(state="normal")
         
         self._display_branches(conv)
 
@@ -545,16 +565,7 @@ class ConversationManagerApp(ctk.CTk):
                 "Deleted",
                 f"{message}\n\nRemember to restart VS Code to see changes!"
             )
-            self.selected_conversation = None
-            self.detail_vscode_title.configure(text="")
-            self.detail_stats.configure(text="No conversation selected")
-            self.rename_entry.delete(0, 'end')
-            self.rename_btn.configure(state="disabled")
-            self.delete_btn.configure(state="disabled")
-            self.move_btn.configure(state="disabled")
-            
-            for widget in self.branches_frame.winfo_children():
-                widget.destroy()
+            self._clear_selection()
             
             if self.selected_project:
                 self._select_project(self.selected_project)
@@ -705,24 +716,14 @@ class ConversationManagerApp(ctk.CTk):
     
     def _move_complete(self, success: bool, message: str):
         """Handle move completion."""
-        self.move_btn.configure(state="normal", text="Move to Project...")
+        self.move_btn.configure(state="normal", text="Move...")
         
         if success:
             messagebox.showinfo(
                 "Moved",
                 f"{message}\n\nRemember to restart VS Code to see changes!"
             )
-            # Clear selection and refresh
-            self.selected_conversation = None
-            self.detail_vscode_title.configure(text="")
-            self.detail_stats.configure(text="No conversation selected")
-            self.rename_entry.delete(0, 'end')
-            self.rename_btn.configure(state="disabled")
-            self.delete_btn.configure(state="disabled")
-            self.move_btn.configure(state="disabled")
-            
-            for widget in self.branches_frame.winfo_children():
-                widget.destroy()
+            self._clear_selection()
             
             # Refresh projects list and current project
             self._load_projects()
@@ -730,6 +731,137 @@ class ConversationManagerApp(ctk.CTk):
                 self.after(500, lambda: self._select_project(self.selected_project))
         else:
             messagebox.showerror("Error", f"Failed to move: {message}")
+    
+    # =========================================================================
+    # Archive
+    # =========================================================================
+    
+    def _do_archive(self):
+        """Archive the selected conversation."""
+        if not self.selected_conversation:
+            return
+        
+        conv = self.selected_conversation
+        vscode_title = conv.vscode_current_title
+        if len(vscode_title) > 50:
+            vscode_title = vscode_title[:47] + "..."
+        
+        result = messagebox.askyesno(
+            "Confirm Archive",
+            f"Archive this conversation?\n\n"
+            f"VS Code shows: {vscode_title}\n\n"
+            f"The conversation will be moved to an archive folder\n"
+            f"and won't appear in VS Code's Past Conversations.\n\n"
+            f"You can restore it later if needed.",
+            icon="question"
+        )
+        
+        if not result:
+            return
+        
+        self.archive_btn.configure(state="disabled", text="Archiving...")
+        self.update()
+        
+        def archive():
+            success, message = archive_conversation(conv.path)
+            self.after(0, lambda: self._archive_complete(success, message))
+        
+        threading.Thread(target=archive, daemon=True).start()
+    
+    def _archive_complete(self, success: bool, message: str):
+        """Handle archive completion."""
+        self.archive_btn.configure(state="normal", text="Archive")
+        
+        if success:
+            messagebox.showinfo(
+                "Archived",
+                f"{message}\n\nRestart VS Code to see changes."
+            )
+            self._clear_selection()
+            
+            if self.selected_project:
+                self._select_project(self.selected_project)
+        else:
+            messagebox.showerror("Error", f"Failed to archive: {message}")
+    
+    # =========================================================================
+    # Summary
+    # =========================================================================
+    
+    def _show_summary(self):
+        """Show a summary of the selected conversation."""
+        if not self.selected_conversation:
+            return
+        
+        conv = self.selected_conversation
+        
+        # Show loading
+        self.summary_btn.configure(state="disabled", text="Generating...")
+        self.update()
+        
+        def generate():
+            summary = get_conversation_summary(conv.path, max_words=500)
+            self.after(0, lambda: self._display_summary(summary))
+        
+        threading.Thread(target=generate, daemon=True).start()
+    
+    def _display_summary(self, summary: str):
+        """Display the summary in a dialog."""
+        self.summary_btn.configure(state="normal", text="View Summary")
+        
+        # Create dialog
+        dialog = ctk.CTkToplevel(self)
+        dialog.title("Conversation Summary")
+        dialog.geometry("700x500")
+        dialog.transient(self)
+        dialog.grab_set()
+        
+        # Center
+        dialog.update_idletasks()
+        x = self.winfo_x() + (self.winfo_width() - 700) // 2
+        y = self.winfo_y() + (self.winfo_height() - 500) // 2
+        dialog.geometry(f"+{x}+{y}")
+        
+        dialog.grid_rowconfigure(0, weight=1)
+        dialog.grid_columnconfigure(0, weight=1)
+        
+        # Scrollable text area
+        text_frame = ctk.CTkScrollableFrame(dialog)
+        text_frame.grid(row=0, column=0, sticky="nsew", padx=20, pady=20)
+        text_frame.grid_columnconfigure(0, weight=1)
+        
+        # Display summary
+        summary_label = ctk.CTkLabel(
+            text_frame, text=summary,
+            font=ctk.CTkFont(size=12),
+            anchor="nw", justify="left",
+            wraplength=640
+        )
+        summary_label.grid(row=0, column=0, sticky="ew")
+        
+        # Close button
+        ctk.CTkButton(
+            dialog, text="Close", command=dialog.destroy, width=100
+        ).grid(row=1, column=0, pady=(0, 20))
+    
+    # =========================================================================
+    # Helper
+    # =========================================================================
+    
+    def _clear_selection(self):
+        """Clear the current conversation selection and reset UI."""
+        self.selected_conversation = None
+        self.detail_vscode_title.configure(text="")
+        self.detail_stats.configure(text="No conversation selected")
+        self.rename_entry.delete(0, 'end')
+        self.rename_btn.configure(state="disabled")
+        self.delete_btn.configure(state="disabled")
+        self.move_btn.configure(state="disabled")
+        self.archive_btn.configure(state="disabled")
+        self.summary_btn.configure(state="disabled")
+        
+        for widget in self.branches_frame.winfo_children():
+            widget.destroy()
 
 
 def run_gui():

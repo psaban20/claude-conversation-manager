@@ -516,3 +516,192 @@ def move_conversation(conv_path: Path, target_project_path: Path) -> tuple[bool,
         
     except Exception as e:
         return False, f"Error moving file: {str(e)}"
+
+
+
+def archive_conversation(conv_path: Path) -> tuple[bool, str]:
+    """Archive a conversation by moving it to an archive subfolder.
+    
+    The archive folder is created within the same project directory.
+    Archived conversations won't appear in Claude Code's Past Conversations.
+    
+    Args:
+        conv_path: Path to the conversation .jsonl file
+        
+    Returns:
+        tuple: (success: bool, message: str)
+    """
+    import shutil
+    
+    try:
+        if not conv_path.exists():
+            return False, f"File not found: {conv_path}"
+        
+        # Create archive folder in the same project
+        project_dir = conv_path.parent
+        archive_dir = project_dir / "archive"
+        archive_dir.mkdir(exist_ok=True)
+        
+        # Check if already archived
+        target_file = archive_dir / conv_path.name
+        if target_file.exists():
+            return False, f"File already exists in archive: {conv_path.name}"
+        
+        # Move the main file
+        shutil.move(str(conv_path), str(target_file))
+        
+        # Also move backup if exists
+        backup_path = conv_path.with_suffix('.jsonl.backup')
+        if backup_path.exists():
+            target_backup = archive_dir / backup_path.name
+            shutil.move(str(backup_path), str(target_backup))
+        
+        return True, "Conversation archived"
+        
+    except Exception as e:
+        return False, f"Error archiving: {str(e)}"
+
+
+def restore_conversation(archived_path: Path) -> tuple[bool, str]:
+    """Restore an archived conversation back to the project root.
+    
+    Args:
+        archived_path: Path to the archived .jsonl file
+        
+    Returns:
+        tuple: (success: bool, message: str)
+    """
+    import shutil
+    
+    try:
+        if not archived_path.exists():
+            return False, f"File not found: {archived_path}"
+        
+        # Get the project root (parent of archive folder)
+        archive_dir = archived_path.parent
+        project_dir = archive_dir.parent
+        
+        # Check if file exists in project root
+        target_file = project_dir / archived_path.name
+        if target_file.exists():
+            return False, f"File already exists in project: {archived_path.name}"
+        
+        # Move the main file
+        shutil.move(str(archived_path), str(target_file))
+        
+        # Also move backup if exists
+        backup_path = archived_path.with_suffix('.jsonl.backup')
+        if backup_path.exists():
+            target_backup = project_dir / backup_path.name
+            shutil.move(str(backup_path), str(target_backup))
+        
+        return True, "Conversation restored"
+        
+    except Exception as e:
+        return False, f"Error restoring: {str(e)}"
+
+
+def get_conversation_summary(path: Path, max_words: int = 500) -> str:
+    """Generate a summary of a conversation's content.
+    
+    Extracts key user messages and topics discussed to create
+    a readable overview of what the conversation covered.
+    
+    Args:
+        path: Path to the .jsonl file
+        max_words: Maximum words in summary (default 500)
+        
+    Returns:
+        Summary string
+    """
+    try:
+        messages, summaries = _parse_jsonl_file(path)
+        
+        if not messages:
+            return "Empty conversation"
+        
+        # Collect user messages (skip meta/system messages)
+        user_messages = []
+        assistant_snippets = []
+        
+        for msg in messages.values():
+            msg_type = msg.get('type')
+            
+            if msg_type == 'user':
+                # Skip meta messages
+                if msg.get('isMeta'):
+                    continue
+                    
+                content = msg.get('message', {}).get('content', [])
+                text = _extract_text_from_content(content)
+                
+                # Skip session continuation messages
+                if text and not text.startswith('This session is being continued'):
+                    # Skip IDE system messages
+                    if not text.startswith('<ide_'):
+                        user_messages.append(text)
+            
+            elif msg_type == 'assistant':
+                content = msg.get('message', {}).get('content', [])
+                text = _extract_text_from_content(content)
+                if text and len(text) > 50:
+                    # Get first 200 chars of substantial responses
+                    assistant_snippets.append(text[:200])
+        
+        # Build summary
+        lines = []
+        
+        # Header with stats
+        lines.append(f"## Conversation Overview")
+        lines.append(f"**Messages:** {len(messages)} total ({len(user_messages)} user prompts)")
+        lines.append("")
+        
+        # Main topics (from user messages)
+        lines.append("## Key Topics & Requests")
+        lines.append("")
+        
+        # Deduplicate and limit user messages
+        seen = set()
+        unique_messages = []
+        for msg in user_messages:
+            # Normalize for dedup
+            normalized = msg[:100].lower().strip()
+            if normalized not in seen:
+                seen.add(normalized)
+                unique_messages.append(msg)
+        
+        # Show top messages (limit based on word count)
+        word_count = 0
+        for i, msg in enumerate(unique_messages[:20], 1):
+            # Truncate long messages
+            if len(msg) > 200:
+                msg = msg[:200] + "..."
+            
+            lines.append(f"{i}. {msg}")
+            lines.append("")
+            
+            word_count += len(msg.split())
+            if word_count > max_words * 0.7:  # Leave room for header
+                if i < len(unique_messages):
+                    lines.append(f"*...and {len(unique_messages) - i} more prompts*")
+                break
+        
+        return "\n".join(lines)
+        
+    except Exception as e:
+        return f"Error generating summary: {str(e)}"
+
+
+def _extract_text_from_content(content) -> str:
+    """Extract plain text from message content."""
+    if isinstance(content, str):
+        return content
+    
+    if isinstance(content, list):
+        texts = []
+        for c in content:
+            if isinstance(c, dict) and c.get('type') == 'text':
+                texts.append(c.get('text', ''))
+        return ' '.join(texts)
+    
+    return ''
