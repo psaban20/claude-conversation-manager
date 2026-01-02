@@ -729,7 +729,7 @@ def get_branch_summary(path: Path, leaf_uuid: str, max_words: int = 500) -> str:
             return "Empty conversation"
         
         # Get the transcript for this specific branch
-        transcript = _get_branch_transcript(messages, leaf_uuid)
+        transcript = _get_transcript(messages, leaf_uuid)
         
         if not transcript:
             return "Could not trace branch history"
