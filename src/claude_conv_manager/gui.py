@@ -361,9 +361,12 @@ class ConversationManagerApp(ctk.CTk):
         # Sort by modified date descending - SAME as VS Code dropdown
         convs = sorted(convs, key=lambda c: c.modified, reverse=True)
         
+        # Count total branches (what VS Code shows)
+        total_branches = sum(c.branch_count for c in convs)
         unhealthy = sum(1 for c in convs if not c.is_healthy)
+        
         self.stats_label.configure(
-            text=f"{len(convs)} conversations - {unhealthy} need attention"
+            text=f"{len(convs)} files ({total_branches} VS Code entries) - {unhealthy} need attention"
         )
         
         for i, conv in enumerate(convs):
@@ -429,27 +432,14 @@ class ConversationManagerApp(ctk.CTk):
         vscode_title = conv.vscode_current_title
         self.detail_vscode_title.configure(text=vscode_title)
         
-        # Find position in VS Code dropdown order
-        if self.selected_project:
-            sorted_convs = sorted(
-                self.selected_project.conversations, 
-                key=lambda c: c.modified, reverse=True
-            )
-            try:
-                position = sorted_convs.index(conv) + 1
-            except ValueError:
-                position = "?"
-        else:
-            position = "?"
-        
         rel_time = get_relative_time(conv.modified)
         
         stats = (
-            f"VS Code Position: #{position} ({rel_time})\n"
             f"Branches: {conv.branch_count} ({conv.unnamed_branches} unnamed)\n"
+            f"→ Each branch = 1 VS Code dropdown entry\n"
             f"Messages: {conv.total_messages}\n"
             f"Size: {conv.file_size / 1024:.1f} KB\n"
-            f"Modified: {conv.modified.strftime('%Y-%m-%d %H:%M')}\n"
+            f"Last activity: {conv.modified.strftime('%Y-%m-%d %H:%M')} ({rel_time})\n"
             f"File: {conv.filename}"
         )
         self.detail_stats.configure(text=stats)
