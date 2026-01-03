@@ -368,7 +368,7 @@ class ConversationManagerApp(ctk.CTk):
         self._clear_selection()
         
         if self.viewing_archive:
-            self.archive_toggle_btn.configure(text="← Back to Active", fg_color="#6B4C9A")
+            self.archive_toggle_btn.configure(text="← Conversations", fg_color="#6B4C9A")
             self._load_archived_conversations()
         else:
             self.archive_toggle_btn.configure(text="📦 View Archive", fg_color="gray40")
