@@ -80,7 +80,7 @@ Launch with: `launch-gui.bat` (Windows) or `python -m claude_conv_manager.gui`
 
 **Key Features:**
 - 🏷️ **Rename All Branches** - Updates ALL leaves so the name appears consistently
-- 📦 **Archive** - Move conversations to archive folder (hidden from VS Code but recoverable)
+- 📦 **Archive & Restore** - Move conversations to archive folder (hidden from VS Code). Click "View Archive" to see archived conversations and restore them.
 - 🗑️ **Delete** - Permanently remove conversations
 - 📁 **Move to Project** - Relocate conversations between workspaces
 - 📊 **View Summary** - Generate AI-free summary of conversation content
@@ -90,6 +90,7 @@ Launch with: `launch-gui.bat` (Windows) or `python -m claude_conv_manager.gui`
 - 🟢 Green dot: Branch has a name (summary exists)
 - 🔴 Red dot + number: Unnamed branches needing attention
 - Relative time display (now, 14d, 1mo) matching VS Code's format
+- 📦 "View Archive" button to toggle between active and archived conversations
 
 ### CLI Interface
 
