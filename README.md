@@ -166,6 +166,90 @@ After:  15 branches, all 15 have summary → VS Code always shows "My Name"
 
 The extension caches conversation data in memory and doesn't detect file changes.
 
+## ⚠️ Warnings & Caveats
+
+Before using this tool, please understand these important behaviors:
+
+### 1. Back Up First
+**Always back up your `.claude` folder before making bulk changes.**
+```
+# Windows
+xcopy "%USERPROFILE%\.claude" "%USERPROFILE%\.claude-backup" /E /I
+
+# macOS/Linux  
+cp -r ~/.claude ~/.claude-backup
+```
+
+### 2. Renaming Overwrites ALL Branch Names
+When you rename a conversation, this tool updates **every branch** to the same name. If your conversation evolved through multiple sessions with different topics, you'll lose that context:
+
+```
+Before rename:
+  Branch 1: "Setting up authentication"
+  Branch 2: "Fixing login bug"  
+  Branch 3: "Adding OAuth support"
+
+After rename to "Auth Work":
+  Branch 1: "Auth Work"
+  Branch 2: "Auth Work"
+  Branch 3: "Auth Work"
+```
+
+**This is intentional** - it ensures consistent naming regardless of which branch VS Code picks. But if you valued the historical progression of names, consider whether renaming is right for that conversation.
+
+### 3. VS Code Dropdown ≠ Conversation Manager List
+The mapping is not 1:1:
+
+| Conversation Manager | VS Code Dropdown |
+|---------------------|------------------|
+| Shows **files** (grouped) | Shows **branches** (flat list) |
+| 27 files | Could be 170+ entries |
+| Sorted by file modification | Sorted by branch timestamp |
+
+A single file with many branches appears as **many separate entries** in VS Code's dropdown.
+
+### 4. The Extension May Regenerate Names
+Claude Code extension can create new summary records during normal use. If you continue a conversation after renaming, the extension might:
+- Add new branches with auto-generated names
+- Create new summary records that differ from your custom name
+
+You may need to re-rename conversations you actively use.
+
+### 5. "Orphan" Summary Files Can Cause Chaos
+We discovered that summary-only files (containing name records but no actual messages) can exist. These create duplicate/garbage entries in VS Code. Signs of this problem:
+- Same conversation name appears many times with different dates
+- Dropdown has entries like "API Error: 401..." repeated dozens of times
+
+**Solution**: Delete or archive these orphan files. The Conversation Manager helps identify them (files with 0 messages but multiple summaries).
+
+### 6. Archive Is Just a Subfolder
+The "Archive" feature simply moves files to a `/archive` subfolder within the project. The Claude Code extension doesn't scan subfolders, so archived conversations disappear from the dropdown. This is not encryption or secure deletion - the files are still there and readable.
+
+### 7. Multi-Root Workspaces Are Tricky
+If you use VS Code workspaces with multiple folders:
+- Conversations are associated with the **first folder** listed in the workspace
+- Opening the same folder directly vs. via workspace may show different conversations
+- Use "Move to Project" if conversations ended up in the wrong project
+
+### 8. Large Conversations May Be Slow
+Conversations with thousands of messages or dozens of branches take longer to:
+- Load in the Conversation Manager
+- Generate summaries
+- Rename (writing many summary records)
+
+The tool doesn't have a progress indicator for these operations yet.
+
+### 9. This Tool Modifies Claude's Internal Files
+This tool directly manipulates `.jsonl` files that the Claude Code extension owns. While we've reverse-engineered the format carefully:
+- Anthropic could change the format in future updates
+- There's no official API or documentation for this
+- Use at your own risk
+
+### 10. Names Have Character Limits
+Very long names may be truncated in the VS Code dropdown. Keep names under ~60 characters for best display.
+
+---
+
 ## Troubleshooting
 
 ### "I renamed but VS Code still shows old name"
