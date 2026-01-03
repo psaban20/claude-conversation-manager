@@ -2,6 +2,8 @@
 
 A GUI and CLI tool for managing Claude Code VS Code extension conversations - rename, analyze, archive, move, and generate summaries.
 
+![Claude Conversation Manager Screenshot](screenshot.png)
+
 ## Understanding VS Code Claude Code Extension Architecture
 
 ### Where Conversations Are Stored
