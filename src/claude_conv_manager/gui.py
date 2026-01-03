@@ -114,7 +114,7 @@ class ConversationManagerApp(ctk.CTk):
     def _create_main_panel(self):
         """Create the center panel with conversation list."""
         self.main_panel = ctk.CTkFrame(self.paned, corner_radius=0)
-        self.main_panel.grid_rowconfigure(3, weight=1)
+        self.main_panel.grid_rowconfigure(2, weight=1)  # Row 2 is the conv_list
         self.main_panel.grid_columnconfigure(0, weight=1)
         
         # Header frame with project name and archive toggle
