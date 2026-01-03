@@ -9,9 +9,30 @@ import os
 import json
 import sys
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional
 from pathlib import Path
+
+
+def get_relative_time(dt: datetime) -> str:
+    """Convert datetime to VS Code style relative time (now, 14d, 1mo, etc.)."""
+    now = datetime.now()
+    diff = now - dt
+    
+    if diff < timedelta(minutes=5):
+        return "now"
+    elif diff < timedelta(hours=1):
+        return f"{int(diff.seconds / 60)}m"
+    elif diff < timedelta(days=1):
+        return f"{int(diff.seconds / 3600)}h"
+    elif diff < timedelta(days=30):
+        return f"{diff.days}d"
+    elif diff < timedelta(days=365):
+        months = diff.days // 30
+        return f"{months}mo"
+    else:
+        years = diff.days // 365
+        return f"{years}y"
 
 
 def get_claude_projects_dir() -> Path:

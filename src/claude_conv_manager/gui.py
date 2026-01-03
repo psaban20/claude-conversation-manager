@@ -27,6 +27,7 @@ from .core import (
     archive_conversation,
     get_conversation_summary,
     get_branch_summary,
+    get_relative_time,
 )
 
 
@@ -339,7 +340,7 @@ class ConversationManagerApp(ctk.CTk):
 
 
     def _display_conversations(self):
-        """Display conversations in main panel."""
+        """Display conversations in main panel - sorted like VS Code dropdown."""
         if not self.selected_project:
             return
         
@@ -357,6 +358,9 @@ class ConversationManagerApp(ctk.CTk):
             empty.grid(row=0, column=0, pady=20)
             return
         
+        # Sort by modified date descending - SAME as VS Code dropdown
+        convs = sorted(convs, key=lambda c: c.modified, reverse=True)
+        
         unhealthy = sum(1 for c in convs if not c.is_healthy)
         self.stats_label.configure(
             text=f"{len(convs)} conversations - {unhealthy} need attention"
@@ -366,35 +370,44 @@ class ConversationManagerApp(ctk.CTk):
             self._create_conversation_row(conv, i)
     
     def _create_conversation_row(self, conv: Conversation, row: int):
-        """Create a row for a conversation - showing VS Code title."""
+        """Create a row for a conversation - matching VS Code dropdown display."""
         frame = ctk.CTkFrame(self.conv_list, fg_color="transparent")
         frame.grid(row=row, column=0, pady=2, sticky="ew")
-        frame.grid_columnconfigure(1, weight=1)
+        frame.grid_columnconfigure(2, weight=1)
+        
+        # Position number - matches VS Code dropdown order
+        pos_label = ctk.CTkLabel(
+            frame, text=f"#{row + 1}",
+            font=ctk.CTkFont(size=10),
+            text_color="#888888", width=30
+        )
+        pos_label.grid(row=0, column=0, padx=(5, 2))
         
         # Status indicator
         if conv.is_healthy:
             status_color = "#2ecc71"
-            status_text = "OK"
+            status_text = "●"
         else:
             status_color = "#e74c3c"
-            status_text = f"!{conv.unnamed_branches}"
+            status_text = f"●{conv.unnamed_branches}"
         
         status = ctk.CTkLabel(
             frame, text=status_text,
             font=ctk.CTkFont(size=10, weight="bold"),
-            text_color=status_color, width=35
+            text_color=status_color, width=25
         )
-        status.grid(row=0, column=0, padx=(5, 10))
+        status.grid(row=0, column=1, padx=(0, 5))
         
-        # Always show VS Code title to help identify conversations
+        # VS Code title - this is what appears in VS Code dropdown
         vscode_title = conv.vscode_current_title
-        if len(vscode_title) > 55:
-            vscode_title = vscode_title[:52] + "..."
+        if len(vscode_title) > 50:
+            vscode_title = vscode_title[:47] + "..."
         
-        if conv.is_healthy:
-            subtitle = f"{conv.modified.strftime('%Y-%m-%d')} - {conv.branch_count} branches - {conv.total_messages} msgs"
-        else:
-            subtitle = f"{conv.modified.strftime('%Y-%m-%d')} - {conv.branch_count} branches - {conv.unnamed_branches} need names"
+        # Relative time like VS Code shows
+        rel_time = get_relative_time(conv.modified)
+        
+        # Subtitle with details
+        subtitle = f"{rel_time} | {conv.branch_count}b | {conv.total_messages} msgs"
         
         btn = ctk.CTkButton(
             frame,
@@ -406,7 +419,7 @@ class ConversationManagerApp(ctk.CTk):
             height=50,
             command=lambda c=conv: self._select_conversation(c)
         )
-        btn.grid(row=0, column=1, sticky="ew")
+        btn.grid(row=0, column=2, sticky="ew")
     
     def _select_conversation(self, conv: Conversation):
         """Handle conversation selection."""
@@ -416,7 +429,23 @@ class ConversationManagerApp(ctk.CTk):
         vscode_title = conv.vscode_current_title
         self.detail_vscode_title.configure(text=vscode_title)
         
+        # Find position in VS Code dropdown order
+        if self.selected_project:
+            sorted_convs = sorted(
+                self.selected_project.conversations, 
+                key=lambda c: c.modified, reverse=True
+            )
+            try:
+                position = sorted_convs.index(conv) + 1
+            except ValueError:
+                position = "?"
+        else:
+            position = "?"
+        
+        rel_time = get_relative_time(conv.modified)
+        
         stats = (
+            f"VS Code Position: #{position} ({rel_time})\n"
             f"Branches: {conv.branch_count} ({conv.unnamed_branches} unnamed)\n"
             f"Messages: {conv.total_messages}\n"
             f"Size: {conv.file_size / 1024:.1f} KB\n"
