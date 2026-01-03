@@ -118,7 +118,7 @@ claude-conv-manager health --all
 
 ```bash
 # Clone the repository
-git clone https://github.com/pablosaban/claude-conversation-manager.git
+git clone https://github.com/psaban20/claude-conversation-manager.git
 cd claude-conversation-manager
 
 # Install with GUI support (recommended)

@@ -46,9 +46,9 @@ claude-conv-manager = "claude_conv_manager.cli:main"
 claude-conv-manager-gui = "claude_conv_manager.gui:run_gui"
 
 [project.urls]
-Homepage = "https://github.com/pablosaban/claude-conversation-manager"
-Repository = "https://github.com/pablosaban/claude-conversation-manager"
-Issues = "https://github.com/pablosaban/claude-conversation-manager/issues"
+Homepage = "https://github.com/psaban20/claude-conversation-manager"
+Repository = "https://github.com/psaban20/claude-conversation-manager"
+Issues = "https://github.com/psaban20/claude-conversation-manager/issues"
 
 [tool.setuptools.packages.find]
 where = ["src"]
