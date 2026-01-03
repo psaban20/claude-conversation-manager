@@ -25,6 +25,7 @@ from .core import (
     path_to_project_name,
     get_or_create_project,
     archive_conversation,
+    restore_conversation,
     get_conversation_summary,
     get_branch_summary,
     get_relative_time,
@@ -113,17 +114,35 @@ class ConversationManagerApp(ctk.CTk):
     def _create_main_panel(self):
         """Create the center panel with conversation list."""
         self.main_panel = ctk.CTkFrame(self.paned, corner_radius=0)
-        self.main_panel.grid_rowconfigure(2, weight=1)
+        self.main_panel.grid_rowconfigure(3, weight=1)
         self.main_panel.grid_columnconfigure(0, weight=1)
         
-        # Header with project name
+        # Header frame with project name and archive toggle
+        header_frame = ctk.CTkFrame(self.main_panel, fg_color="transparent")
+        header_frame.grid(row=0, column=0, padx=20, pady=(20, 5), sticky="ew")
+        header_frame.grid_columnconfigure(0, weight=1)
+        
         self.main_header = ctk.CTkLabel(
-            self.main_panel,
+            header_frame,
             text="Select a project",
             font=ctk.CTkFont(size=16, weight="bold"),
             anchor="w"
         )
-        self.main_header.grid(row=0, column=0, padx=20, pady=(20, 5), sticky="ew")
+        self.main_header.grid(row=0, column=0, sticky="w")
+        
+        # Archive toggle button
+        self.viewing_archive = False
+        self.archive_toggle_btn = ctk.CTkButton(
+            header_frame,
+            text="📦 View Archive",
+            width=110,
+            height=28,
+            font=ctk.CTkFont(size=11),
+            fg_color="gray40",
+            hover_color="gray50",
+            command=self._toggle_archive_view
+        )
+        self.archive_toggle_btn.grid(row=0, column=1, padx=(10, 0))
         
         # Stats bar
         self.stats_label = ctk.CTkLabel(
@@ -323,6 +342,8 @@ class ConversationManagerApp(ctk.CTk):
         """Handle project selection."""
         self.selected_project = project
         self.selected_conversation = None
+        self.viewing_archive = False
+        self.archive_toggle_btn.configure(text="📦 View Archive", fg_color="gray40")
         
         self.main_header.configure(text=project.display_name)
         
@@ -337,6 +358,179 @@ class ConversationManagerApp(ctk.CTk):
             self.after(0, self._display_conversations)
         
         threading.Thread(target=load, daemon=True).start()
+    
+    def _toggle_archive_view(self):
+        """Toggle between active and archived conversations."""
+        if not self.selected_project:
+            return
+        
+        self.viewing_archive = not self.viewing_archive
+        self._clear_selection()
+        
+        if self.viewing_archive:
+            self.archive_toggle_btn.configure(text="← Back to Active", fg_color="#6B4C9A")
+            self._load_archived_conversations()
+        else:
+            self.archive_toggle_btn.configure(text="📦 View Archive", fg_color="gray40")
+            self._display_conversations()
+    
+    def _load_archived_conversations(self):
+        """Load and display archived conversations."""
+        if not self.selected_project:
+            return
+        
+        for widget in self.conv_list.winfo_children():
+            widget.destroy()
+        
+        # Check for archive folder
+        archive_dir = self.selected_project.path / "archive"
+        
+        if not archive_dir.exists():
+            empty = ctk.CTkLabel(
+                self.conv_list,
+                text="No archived conversations\n\nArchived conversations will appear here",
+                text_color="gray"
+            )
+            empty.grid(row=0, column=0, pady=50)
+            self.stats_label.configure(text="Archive: 0 conversations")
+            return
+        
+        # Load archived conversations
+        archived = []
+        for f in archive_dir.glob("*.jsonl"):
+            if f.name.startswith("agent-"):
+                continue
+            conv = analyze_conversation(f)
+            if conv:
+                archived.append(conv)
+        
+        if not archived:
+            empty = ctk.CTkLabel(
+                self.conv_list,
+                text="No archived conversations\n\nArchived conversations will appear here",
+                text_color="gray"
+            )
+            empty.grid(row=0, column=0, pady=50)
+            self.stats_label.configure(text="Archive: 0 conversations")
+            return
+        
+        # Sort by modified date
+        archived = sorted(archived, key=lambda c: c.modified, reverse=True)
+        
+        self.stats_label.configure(text=f"Archive: {len(archived)} conversations")
+        
+        for i, conv in enumerate(archived):
+            self._create_archived_row(conv, i)
+    
+    def _create_archived_row(self, conv: Conversation, row: int):
+        """Create a row for an archived conversation."""
+        frame = ctk.CTkFrame(self.conv_list, fg_color="transparent")
+        frame.grid(row=row, column=0, pady=2, sticky="ew")
+        frame.grid_columnconfigure(1, weight=1)
+        
+        # Archive icon
+        icon = ctk.CTkLabel(
+            frame, text="📦",
+            font=ctk.CTkFont(size=14), width=30
+        )
+        icon.grid(row=0, column=0, padx=(5, 5))
+        
+        # Title and info
+        vscode_title = conv.vscode_current_title
+        if len(vscode_title) > 45:
+            vscode_title = vscode_title[:42] + "..."
+        
+        rel_time = get_relative_time(conv.modified)
+        subtitle = f"Archived | {conv.branch_count}b | {conv.total_messages} msgs"
+        
+        btn = ctk.CTkButton(
+            frame,
+            text=f"{vscode_title}\n{subtitle}",
+            anchor="w",
+            font=ctk.CTkFont(size=12),
+            fg_color="transparent",
+            hover_color=("gray75", "gray25"),
+            height=50,
+            command=lambda c=conv: self._select_archived_conversation(c)
+        )
+        btn.grid(row=0, column=1, sticky="ew")
+        
+        # Restore button
+        restore_btn = ctk.CTkButton(
+            frame,
+            text="Restore",
+            width=70,
+            height=30,
+            font=ctk.CTkFont(size=11),
+            fg_color="#2E7D32",
+            hover_color="#388E3C",
+            command=lambda c=conv: self._do_restore(c)
+        )
+        restore_btn.grid(row=0, column=2, padx=(5, 10))
+    
+    def _select_archived_conversation(self, conv: Conversation):
+        """Handle selection of an archived conversation."""
+        self.selected_conversation = conv
+        
+        vscode_title = conv.vscode_current_title
+        self.detail_vscode_title.configure(text=vscode_title)
+        
+        rel_time = get_relative_time(conv.modified)
+        
+        stats = (
+            f"📦 ARCHIVED\n"
+            f"Branches: {conv.branch_count} ({conv.unnamed_branches} unnamed)\n"
+            f"Messages: {conv.total_messages}\n"
+            f"Size: {conv.file_size / 1024:.1f} KB\n"
+            f"Archived: {conv.modified.strftime('%Y-%m-%d %H:%M')}\n"
+            f"File: {conv.filename}"
+        )
+        self.detail_stats.configure(text=stats)
+        
+        # Disable most buttons, but show restore option
+        self.rename_entry.delete(0, 'end')
+        self.rename_btn.configure(state="disabled")
+        self.delete_btn.configure(state="disabled")
+        self.move_btn.configure(state="disabled")
+        self.archive_btn.configure(state="disabled")
+        self.summary_btn.configure(state="normal")  # Can still view summary
+        
+        self._display_branches(conv)
+    
+    def _do_restore(self, conv: Conversation):
+        """Restore an archived conversation."""
+        vscode_title = conv.vscode_current_title
+        if len(vscode_title) > 50:
+            vscode_title = vscode_title[:47] + "..."
+        
+        result = messagebox.askyesno(
+            "Confirm Restore",
+            f"Restore this conversation?\n\n"
+            f"{vscode_title}\n\n"
+            f"It will reappear in VS Code's Past Conversations.",
+            icon="question"
+        )
+        
+        if not result:
+            return
+        
+        def restore():
+            success, message = restore_conversation(conv.path)
+            self.after(0, lambda: self._restore_complete(success, message))
+        
+        threading.Thread(target=restore, daemon=True).start()
+    
+    def _restore_complete(self, success: bool, message: str):
+        """Handle restore completion."""
+        if success:
+            messagebox.showinfo(
+                "Restored",
+                f"{message}\n\nRestart VS Code to see the conversation."
+            )
+            self._clear_selection()
+            self._load_archived_conversations()
+        else:
+            messagebox.showerror("Error", f"Failed to restore: {message}")
 
 
     def _display_conversations(self):
