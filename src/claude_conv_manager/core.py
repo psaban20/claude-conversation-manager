@@ -463,8 +463,8 @@ def load_project_conversations(project: ClaudeProject) -> None:
 def path_to_project_name(path: Path) -> str:
     """Convert a filesystem path to Claude project folder name.
     
-    Example: C:/dropboxfolders/pablosaban/Dropbox/HJB/GitHub 
-         -> c--dropboxfolders-pablosaban-Dropbox-HJB-GitHub
+    Example: C:/Users/me/projects/my-app 
+         -> c--Users-me-projects-my-app
     """
     # Normalize the path
     path_str = str(path.resolve())

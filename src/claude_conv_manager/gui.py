@@ -964,7 +964,7 @@ class ConversationManagerApp(ctk.CTk):
         
         new_path_entry = ctk.CTkEntry(
             bottom_frame, 
-            placeholder_text="e.g., C:\\dropboxfolders\\pablosaban\\Dropbox\\HJB\\GitHub",
+            placeholder_text="e.g., C:\\Users\\me\\projects\\my-app",
             width=540
         )
         new_path_entry.pack(fill="x", pady=(0, 15))
