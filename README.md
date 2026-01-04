@@ -301,9 +301,11 @@ claude-conversation-manager/
 - [x] Resizable panes
 - [x] Conversation search
 - [ ] Batch rename operations
+- [ ] Truncate conversations (remove older messages to reduce size)
 - [ ] Branch visualization (tree view)
 - [ ] Orphan file detection and cleanup wizard
 - [ ] Export conversations to markdown
+- [ ] Cross-project context sharing (generate combined context from multiple conversations)
 
 ## License
 
