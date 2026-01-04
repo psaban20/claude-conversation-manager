@@ -17,6 +17,7 @@ from .core import (
     ClaudeProject,
     Conversation,
     Branch,
+    SearchResult,
     get_claude_projects_dir,
     list_projects,
     load_project_conversations,
@@ -30,12 +31,14 @@ from .core import (
     get_conversation_summary,
     get_branch_summary,
     get_relative_time,
+    search_conversations,
 )
 
 __all__ = [
     "ClaudeProject",
     "Conversation", 
     "Branch",
+    "SearchResult",
     "get_claude_projects_dir",
     "list_projects",
     "load_project_conversations",
@@ -49,4 +52,5 @@ __all__ = [
     "get_conversation_summary",
     "get_branch_summary",
     "get_relative_time",
+    "search_conversations",
 ]

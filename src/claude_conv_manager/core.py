@@ -827,3 +827,95 @@ def get_branch_summary(path: Path, leaf_uuid: str, max_words: int = 500) -> str:
         
     except Exception as e:
         return f"Error generating branch summary: {str(e)}"
+
+
+
+@dataclass
+class SearchResult:
+    """A search result with context."""
+    conversation: Conversation
+    matches: list[dict]  # List of {type, text, context} dicts
+    score: int  # Number of matches
+
+
+def search_conversations(project: ClaudeProject, query: str) -> list[SearchResult]:
+    """
+    Search all conversations in a project for a query string.
+    
+    Searches:
+    - Branch/conversation names (summaries)
+    - User prompts
+    
+    Returns results sorted by relevance (match count).
+    """
+    if not query or len(query) < 2:
+        return []
+    
+    query_lower = query.lower()
+    results = []
+    
+    for conv in project.conversations:
+        matches = []
+        
+        # Search branch names
+        for branch in conv.branches:
+            if branch.summary and query_lower in branch.summary.lower():
+                matches.append({
+                    'type': 'branch_name',
+                    'text': branch.summary,
+                    'context': f"Branch: {branch.summary}"
+                })
+        
+        # Search user prompts in the conversation file
+        try:
+            messages, _ = _parse_jsonl_file(conv.path)
+            
+            for msg_uuid, msg_data in messages.items():
+                if msg_data.get('type') != 'user':
+                    continue
+                
+                content = msg_data.get('content', [])
+                for c in content:
+                    if isinstance(c, dict) and c.get('type') == 'text':
+                        text = c.get('text', '')
+                        
+                        # Skip meta messages
+                        if text.startswith('<ide_') or text.startswith('This session is being continued'):
+                            continue
+                        
+                        if query_lower in text.lower():
+                            # Create snippet with context around match
+                            idx = text.lower().find(query_lower)
+                            start = max(0, idx - 40)
+                            end = min(len(text), idx + len(query) + 40)
+                            
+                            snippet = text[start:end]
+                            if start > 0:
+                                snippet = "..." + snippet
+                            if end < len(text):
+                                snippet = snippet + "..."
+                            
+                            matches.append({
+                                'type': 'user_prompt',
+                                'text': text[:100] + "..." if len(text) > 100 else text,
+                                'context': snippet
+                            })
+                            
+                            # Limit matches per conversation
+                            if len([m for m in matches if m['type'] == 'user_prompt']) >= 5:
+                                break
+                    
+        except Exception:
+            pass
+        
+        if matches:
+            results.append(SearchResult(
+                conversation=conv,
+                matches=matches,
+                score=len(matches)
+            ))
+    
+    # Sort by score descending
+    results.sort(key=lambda r: r.score, reverse=True)
+    
+    return results

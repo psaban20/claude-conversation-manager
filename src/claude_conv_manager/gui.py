@@ -29,6 +29,7 @@ from .core import (
     get_conversation_summary,
     get_branch_summary,
     get_relative_time,
+    search_conversations,
 )
 
 
@@ -114,7 +115,7 @@ class ConversationManagerApp(ctk.CTk):
     def _create_main_panel(self):
         """Create the center panel with conversation list."""
         self.main_panel = ctk.CTkFrame(self.paned, corner_radius=0)
-        self.main_panel.grid_rowconfigure(2, weight=1)  # Row 2 is the conv_list
+        self.main_panel.grid_rowconfigure(3, weight=1)  # Row 3 is the conv_list
         self.main_panel.grid_columnconfigure(0, weight=1)
         
         # Header frame with project name and archive toggle
@@ -144,6 +145,35 @@ class ConversationManagerApp(ctk.CTk):
         )
         self.archive_toggle_btn.grid(row=0, column=1, padx=(10, 0))
         
+        # Search frame
+        search_frame = ctk.CTkFrame(self.main_panel, fg_color="transparent")
+        search_frame.grid(row=1, column=0, padx=20, pady=(5, 5), sticky="ew")
+        search_frame.grid_columnconfigure(0, weight=1)
+        
+        self.search_entry = ctk.CTkEntry(
+            search_frame,
+            placeholder_text="🔍 Search conversations...",
+            height=32
+        )
+        self.search_entry.grid(row=0, column=0, sticky="ew")
+        self.search_entry.bind("<Return>", lambda e: self._do_search())
+        self.search_entry.bind("<KeyRelease>", self._on_search_key)
+        
+        self.clear_search_btn = ctk.CTkButton(
+            search_frame,
+            text="✕",
+            width=32,
+            height=32,
+            font=ctk.CTkFont(size=14),
+            fg_color="gray40",
+            hover_color="gray50",
+            command=self._clear_search
+        )
+        self.clear_search_btn.grid(row=0, column=1, padx=(5, 0))
+        self.clear_search_btn.grid_remove()  # Hidden until search is active
+        
+        self.searching = False
+        
         # Stats bar
         self.stats_label = ctk.CTkLabel(
             self.main_panel,
@@ -152,11 +182,11 @@ class ConversationManagerApp(ctk.CTk):
             text_color="gray",
             anchor="w"
         )
-        self.stats_label.grid(row=1, column=0, padx=20, pady=(0, 10), sticky="ew")
+        self.stats_label.grid(row=2, column=0, padx=20, pady=(0, 10), sticky="ew")
         
         # Conversation list (scrollable)
         self.conv_list = ctk.CTkScrollableFrame(self.main_panel)
-        self.conv_list.grid(row=2, column=0, padx=10, pady=10, sticky="nsew")
+        self.conv_list.grid(row=3, column=0, padx=10, pady=10, sticky="nsew")
         self.conv_list.grid_columnconfigure(0, weight=1)
     
     def _create_detail_panel(self):
@@ -531,6 +561,116 @@ class ConversationManagerApp(ctk.CTk):
             self._load_archived_conversations()
         else:
             messagebox.showerror("Error", f"Failed to restore: {message}")
+
+    def _on_search_key(self, event):
+        """Handle key release in search box - clear if empty."""
+        query = self.search_entry.get().strip()
+        if not query and self.searching:
+            self._clear_search()
+    
+    def _do_search(self):
+        """Execute search."""
+        if not self.selected_project:
+            return
+        
+        query = self.search_entry.get().strip()
+        if len(query) < 2:
+            return
+        
+        self.searching = True
+        self.clear_search_btn.grid()  # Show clear button
+        
+        # Clear current display
+        for widget in self.conv_list.winfo_children():
+            widget.destroy()
+        
+        loading = ctk.CTkLabel(self.conv_list, text="Searching...")
+        loading.grid(row=0, column=0, pady=20)
+        self.update()
+        
+        def search():
+            results = search_conversations(self.selected_project, query)
+            self.after(0, lambda: self._display_search_results(results, query))
+        
+        threading.Thread(target=search, daemon=True).start()
+    
+    def _display_search_results(self, results, query):
+        """Display search results."""
+        for widget in self.conv_list.winfo_children():
+            widget.destroy()
+        
+        if not results:
+            empty = ctk.CTkLabel(
+                self.conv_list,
+                text=f"No results for \"{query}\"",
+                text_color="gray"
+            )
+            empty.grid(row=0, column=0, pady=50)
+            self.stats_label.configure(text=f"Search: 0 results for \"{query}\"")
+            return
+        
+        total_matches = sum(r.score for r in results)
+        self.stats_label.configure(
+            text=f"Search: {len(results)} conversations, {total_matches} matches for \"{query}\""
+        )
+        
+        for i, result in enumerate(results):
+            self._create_search_result_row(result, i, query)
+    
+    def _create_search_result_row(self, result, row: int, query: str):
+        """Create a row for a search result."""
+        frame = ctk.CTkFrame(self.conv_list, fg_color="transparent")
+        frame.grid(row=row, column=0, pady=4, sticky="ew")
+        frame.grid_columnconfigure(0, weight=1)
+        
+        conv = result.conversation
+        
+        # Title with match count
+        title = conv.vscode_current_title
+        if len(title) > 50:
+            title = title[:47] + "..."
+        
+        title_text = f"{title}  ({result.score} matches)"
+        
+        title_btn = ctk.CTkButton(
+            frame,
+            text=title_text,
+            anchor="w",
+            font=ctk.CTkFont(size=13, weight="bold"),
+            fg_color="transparent",
+            hover_color=("gray75", "gray25"),
+            text_color="#4A9EFF",
+            height=30,
+            command=lambda c=conv: self._select_conversation(c)
+        )
+        title_btn.grid(row=0, column=0, sticky="ew")
+        
+        # Show match snippets
+        for j, match in enumerate(result.matches[:3]):  # Show up to 3 matches
+            snippet = match['context']
+            
+            # Highlight the query in the snippet
+            snippet_label = ctk.CTkLabel(
+                frame,
+                text=f"  → {snippet}",
+                font=ctk.CTkFont(size=11),
+                text_color="gray",
+                anchor="w",
+                wraplength=450
+            )
+            snippet_label.grid(row=j+1, column=0, sticky="w", padx=(20, 0))
+    
+    def _clear_search(self):
+        """Clear search and return to normal view."""
+        self.searching = False
+        self.search_entry.delete(0, 'end')
+        self.clear_search_btn.grid_remove()
+        self._clear_selection()
+        
+        if self.viewing_archive:
+            self._load_archived_conversations()
+        else:
+            self._display_conversations()
 
 
     def _display_conversations(self):

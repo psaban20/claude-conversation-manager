@@ -87,6 +87,7 @@ Launch with: `launch-gui.bat` (Windows) or `python -m claude_conv_manager.gui`
 - 📁 **Move to Project** - Relocate conversations between workspaces
 - 📊 **View Summary** - Generate AI-free summary of conversation content
 - 🔍 **Branch Summaries** - Click any branch to see what that specific path discussed
+- 🔎 **Search** - Search across all conversations in a project by keyword
 
 **Visual Indicators:**
 - 🟢 Green dot: Branch has a name (summary exists)
@@ -298,8 +299,8 @@ claude-conversation-manager/
 - [x] Conversation summaries
 - [x] Branch-level summaries
 - [x] Resizable panes
+- [x] Conversation search
 - [ ] Batch rename operations
-- [ ] Conversation search/filter
 - [ ] Branch visualization (tree view)
 - [ ] Orphan file detection and cleanup wizard
 - [ ] Export conversations to markdown
