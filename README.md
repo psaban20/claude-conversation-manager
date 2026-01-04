@@ -77,7 +77,7 @@ Launch with: `launch-gui.bat` (Windows) or `python -m claude_conv_manager.gui`
 
 **Three-Panel Interface:**
 - **Left**: Project list with conversation counts
-- **Center**: Conversations sorted by activity, showing branch counts
+- **Center**: Conversations sorted by activity, with search bar and branch counts
 - **Right**: Details, rename, and branch management
 
 **Key Features:**
@@ -87,7 +87,7 @@ Launch with: `launch-gui.bat` (Windows) or `python -m claude_conv_manager.gui`
 - 📁 **Move to Project** - Relocate conversations between workspaces
 - 📊 **View Summary** - Generate AI-free summary of conversation content
 - 🔍 **Branch Summaries** - Click any branch to see what that specific path discussed
-- 🔎 **Search** - Search across all conversations in a project by keyword
+- 🔎 **Search** - Full-text search across all conversations in a project (searches branch names and message content)
 
 **Visual Indicators:**
 - 🟢 Green dot: Branch has a name (summary exists)
@@ -281,11 +281,11 @@ Very long names may be truncated in the VS Code dropdown. Keep names under ~60 c
 claude-conversation-manager/
 ├── src/claude_conv_manager/
 │   ├── __init__.py      # Package exports
-│   ├── core.py          # Data models, analysis, rename logic
+│   ├── core.py          # Data models, analysis, rename, search logic
 │   ├── cli.py           # Command-line interface
 │   └── gui.py           # CustomTkinter GUI application
 ├── launch-gui.bat       # Windows GUI launcher
-├── setup.py             # Package configuration
+├── pyproject.toml       # Package configuration
 └── README.md
 ```
 
