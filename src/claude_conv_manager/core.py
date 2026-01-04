@@ -874,36 +874,68 @@ def search_conversations(project: ClaudeProject, query: str) -> list[SearchResul
                 if msg_data.get('type') != 'user':
                     continue
                 
+                # Content can be in different places depending on message format
+                # Format 1: data['content'] = [{'type': 'text', 'text': '...'}]
+                # Format 2: data['message']['content'] = '...' (string)
+                # Format 3: data['message']['content'] = [{'type': 'text', 'text': '...'}]
+                
+                texts_to_search = []
+                
+                # Try data['content'] (list format)
                 content = msg_data.get('content', [])
-                for c in content:
-                    if isinstance(c, dict) and c.get('type') == 'text':
-                        text = c.get('text', '')
+                if isinstance(content, list):
+                    for c in content:
+                        if isinstance(c, dict) and c.get('type') == 'text':
+                            texts_to_search.append(c.get('text', ''))
+                
+                # Try data['message']['content']
+                message = msg_data.get('message', {})
+                if isinstance(message, dict):
+                    msg_content = message.get('content')
+                    if isinstance(msg_content, str):
+                        texts_to_search.append(msg_content)
+                    elif isinstance(msg_content, list):
+                        for c in msg_content:
+                            if isinstance(c, dict):
+                                if c.get('type') == 'text':
+                                    texts_to_search.append(c.get('text', ''))
+                                elif c.get('type') == 'tool_result':
+                                    # Tool results can contain search-worthy content
+                                    texts_to_search.append(c.get('content', ''))
+                
+                for text in texts_to_search:
+                    if not text:
+                        continue
                         
-                        # Skip meta messages
-                        if text.startswith('<ide_') or text.startswith('This session is being continued'):
-                            continue
+                    # Skip meta messages
+                    if text.startswith('<ide_') or text.startswith('This session is being continued'):
+                        continue
+                    
+                    if query_lower in text.lower():
+                        # Create snippet with context around match
+                        idx = text.lower().find(query_lower)
+                        start = max(0, idx - 40)
+                        end = min(len(text), idx + len(query) + 40)
                         
-                        if query_lower in text.lower():
-                            # Create snippet with context around match
-                            idx = text.lower().find(query_lower)
-                            start = max(0, idx - 40)
-                            end = min(len(text), idx + len(query) + 40)
-                            
-                            snippet = text[start:end]
-                            if start > 0:
-                                snippet = "..." + snippet
-                            if end < len(text):
-                                snippet = snippet + "..."
-                            
-                            matches.append({
-                                'type': 'user_prompt',
-                                'text': text[:100] + "..." if len(text) > 100 else text,
-                                'context': snippet
-                            })
-                            
-                            # Limit matches per conversation
-                            if len([m for m in matches if m['type'] == 'user_prompt']) >= 5:
-                                break
+                        snippet = text[start:end]
+                        if start > 0:
+                            snippet = "..." + snippet
+                        if end < len(text):
+                            snippet = snippet + "..."
+                        
+                        matches.append({
+                            'type': 'user_prompt',
+                            'text': text[:100] + "..." if len(text) > 100 else text,
+                            'context': snippet
+                        })
+                        
+                        # Limit matches per conversation
+                        if len([m for m in matches if m['type'] == 'user_prompt']) >= 5:
+                            break
+                
+                # Check if we've hit the limit
+                if len([m for m in matches if m['type'] == 'user_prompt']) >= 5:
+                    break
                     
         except Exception:
             pass
